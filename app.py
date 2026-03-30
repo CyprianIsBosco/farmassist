@@ -1,6 +1,10 @@
 import os
 import numpy as np
 import cv2
+import json
+import urllib.request
+import urllib.error
+import traceback
 from flask import Flask, request, jsonify, render_template
 
 app = Flask(__name__)
@@ -185,14 +189,18 @@ When the situation involves a rapidly spreading disease, significant crop loss r
 
 @app.route('/chat', methods=['POST'])
 def chat():
-    import json
     try:
-        import urllib.request
         data = request.get_json()
         if not data or 'messages' not in data:
             return jsonify({'error': 'No messages provided'}), 400
 
         messages = data['messages']
+
+        api_key = os.environ.get('ANTHROPIC_API_KEY', '').strip()
+        print(f"API key present: {bool(api_key)}, length: {len(api_key)}")
+
+        if not api_key:
+            return jsonify({'error': 'API key not configured on server.'}), 500
 
         payload = json.dumps({
             'model': 'claude-sonnet-4-20250514',
@@ -200,10 +208,6 @@ def chat():
             'system': CHAT_SYSTEM_PROMPT,
             'messages': messages
         }).encode('utf-8')
-
-        api_key = os.environ.get('ANTHROPIC_API_KEY', '')
-        if not api_key:
-            return jsonify({'error': 'API key not configured on server.'}), 500
 
         req = urllib.request.Request(
             'https://api.anthropic.com/v1/messages',
@@ -216,13 +220,23 @@ def chat():
             method='POST'
         )
 
-        with urllib.request.urlopen(req) as resp:
-            result = json.loads(resp.read().decode('utf-8'))
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                result = json.loads(resp.read().decode('utf-8'))
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode('utf-8')
+            print(f"ANTHROPIC HTTP ERROR {e.code}: {error_body}")
+            return jsonify({'error': f'Anthropic API error {e.code}: {error_body}'}), 500
+        except urllib.error.URLError as e:
+            print(f"ANTHROPIC URL ERROR: {e.reason}")
+            return jsonify({'error': f'Network error: {e.reason}'}), 500
 
         reply = ''.join(b.get('text', '') for b in result.get('content', []))
+        print(f"Chat reply generated, length: {len(reply)}")
         return jsonify({'reply': reply})
 
     except Exception as e:
+        print(f"CHAT ROUTE ERROR: {traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
 
 
