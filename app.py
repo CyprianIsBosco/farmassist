@@ -231,7 +231,8 @@ def chat():
             }
         }).encode('utf-8')
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        # ✅ FIXED: Updated from gemini-1.5-flash to gemini-2.0-flash
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
 
         req = urllib.request.Request(
             url,
