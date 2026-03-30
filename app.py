@@ -80,12 +80,13 @@ def load_model_once():
     global model
     if model is None:
         try:
-            from tensorflow.keras.models import load_model as keras_load
-            model_path = os.path.join(os.path.dirname(__file__), 'plant_disease.h5')
-            model = keras_load(model_path)
-            print("Model loaded successfully.")
-        except Exception as e:
-            print(f"Error loading model: {e}")
+            import tflite_runtime.interpreter as tflite
+        except ImportError:
+            import tensorflow.lite as tflite
+        model_path = os.path.join(os.path.dirname(__file__), 'plant_disease.tflite')
+        model = tflite.Interpreter(model_path=model_path)
+        model.allocate_tensors()
+        print("TFLite model loaded successfully.")
     return model
 
 def allowed_file(filename):
@@ -120,9 +121,14 @@ def predict():
 
         resized = cv2.resize(opencv_image, (256, 256))
         normalized = resized / 255.0
-        input_tensor = np.expand_dims(normalized, axis=0)
+        input_tensor = np.expand_dims(normalized, axis=0).astype(np.float32)
 
-        Y_pred = m.predict(input_tensor)
+        input_details = m.get_input_details()
+        output_details = m.get_output_details()
+        m.set_tensor(input_details[0]['index'], input_tensor)
+        m.invoke()
+        Y_pred = m.get_tensor(output_details[0]['index'])[0]
+
         class_idx = int(np.argmax(Y_pred))
         confidence = float(np.max(Y_pred)) * 100
         result_key = CLASS_NAMES[class_idx]
@@ -174,7 +180,7 @@ Response format:
 
 IMPORTANT — Contact reminder rule:
 When the situation involves a rapidly spreading disease, significant crop loss risk, unusual symptoms, or a farmer expressing major financial concern, always end your message with:
-"📞 For urgent help, call our agronomists: +254 700 123 456 or WhatsApp +254 711 987 654 (Mon–Sat, 7am–6pm)"
+"For urgent help, call our agronomists: +254 700 123 456 or WhatsApp +254 711 987 654 (Mon-Sat, 7am-6pm)"
 """
 
 @app.route('/chat', methods=['POST'])
