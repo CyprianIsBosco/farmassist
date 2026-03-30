@@ -157,7 +157,7 @@ def predict():
 
 
 # ─────────────────────────────────────────────
-#  CHATBOT ROUTE
+#  CHATBOT ROUTE — powered by Google Gemini
 # ─────────────────────────────────────────────
 
 CHAT_SYSTEM_PROMPT = """You are FarmAssist, a friendly and knowledgeable agricultural advisor chatbot helping smallholder and commercial farmers — primarily in East Africa (Kenya, Tanzania, Uganda) but also globally.
@@ -196,27 +196,47 @@ def chat():
 
         messages = data['messages']
 
-        api_key = os.environ.get('ANTHROPIC_API_KEY', '').strip()
-        print(f"API key present: {bool(api_key)}, length: {len(api_key)}")
+        api_key = os.environ.get('GEMINI_API_KEY', '').strip()
+        print(f"Gemini API key present: {bool(api_key)}, length: {len(api_key)}")
 
         if not api_key:
-            return jsonify({'error': 'API key not configured on server.'}), 500
+            return jsonify({'error': 'Gemini API key not configured on server.'}), 500
+
+        # Build conversation history for Gemini format
+        gemini_contents = []
+
+        # Add system prompt as first user message + model ack
+        gemini_contents.append({
+            "role": "user",
+            "parts": [{"text": CHAT_SYSTEM_PROMPT + "\n\nPlease confirm you understand your role."}]
+        })
+        gemini_contents.append({
+            "role": "model",
+            "parts": [{"text": "Understood! I am FarmAssist, your agricultural advisor. I am ready to help farmers with crop diseases, pests, soil health, and more. How can I help you today?"}]
+        })
+
+        # Add the actual conversation
+        for msg in messages:
+            role = "user" if msg["role"] == "user" else "model"
+            gemini_contents.append({
+                "role": role,
+                "parts": [{"text": msg["content"]}]
+            })
 
         payload = json.dumps({
-            'model': 'claude-sonnet-4-20250514',
-            'max_tokens': 1000,
-            'system': CHAT_SYSTEM_PROMPT,
-            'messages': messages
+            "contents": gemini_contents,
+            "generationConfig": {
+                "temperature": 0.7,
+                "maxOutputTokens": 1000,
+            }
         }).encode('utf-8')
 
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+
         req = urllib.request.Request(
-            'https://api.anthropic.com/v1/messages',
+            url,
             data=payload,
-            headers={
-                'Content-Type': 'application/json',
-                'x-api-key': api_key,
-                'anthropic-version': '2023-06-01'
-            },
+            headers={'Content-Type': 'application/json'},
             method='POST'
         )
 
@@ -225,13 +245,13 @@ def chat():
                 result = json.loads(resp.read().decode('utf-8'))
         except urllib.error.HTTPError as e:
             error_body = e.read().decode('utf-8')
-            print(f"ANTHROPIC HTTP ERROR {e.code}: {error_body}")
-            return jsonify({'error': f'Anthropic API error {e.code}: {error_body}'}), 500
+            print(f"GEMINI HTTP ERROR {e.code}: {error_body}")
+            return jsonify({'error': f'Gemini API error {e.code}: {error_body}'}), 500
         except urllib.error.URLError as e:
-            print(f"ANTHROPIC URL ERROR: {e.reason}")
+            print(f"GEMINI URL ERROR: {e.reason}")
             return jsonify({'error': f'Network error: {e.reason}'}), 500
 
-        reply = ''.join(b.get('text', '') for b in result.get('content', []))
+        reply = result['candidates'][0]['content']['parts'][0]['text']
         print(f"Chat reply generated, length: {len(reply)}")
         return jsonify({'reply': reply})
 
