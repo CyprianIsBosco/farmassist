@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AgriGuard — Plant Disease Detection</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --soil: #2d1b0e; --bark: #4a2c17; --leaf: #2d6a2f; --leaf-light: #4caf50;
+      --leaf-pale: #81c784; --wheat: #d4a03a; --wheat-light: #f5c842;
+      --cream: #fef9ef; --rust: #c0392b; --sky: #e8f5e9; --shadow: rgba(45,27,14,0.15);
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'DM Sans',sans-serif; background:var(--cream); color:var(--soil); overflow-x:hidden; }
+
+    /* NAV */
+    nav { position:fixed; top:0; left:0; right:0; z-index:100; padding:16px 5%; display:flex; justify-content:space-between; align-items:center; background:rgba(26,61,26,0.9); backdrop-filter:blur(16px); border-bottom:1px solid rgba(255,255,255,0.08); }
+    .nav-logo { font-family:'Playfair Display',serif; color:#fff; font-size:1.4rem; display:flex; align-items:center; gap:8px; }
+    .nav-logo .dot { color:var(--wheat-light); }
+    .nav-links { display:flex; gap:28px; list-style:none; }
+    .nav-links a { color:rgba(255,255,255,0.75); text-decoration:none; font-size:0.9rem; transition:color 0.2s; }
+    .nav-links a:hover { color:var(--wheat-light); }
+
+    /* HERO */
+    .hero { min-height:100vh; background:linear-gradient(160deg,#1a3d1a 0%,#2d6a2f 45%,#4a7c3f 75%,#5d9a3e 100%); position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    .leaves-bg { position:absolute; inset:0; pointer-events:none; }
+    .leaf-anim { position:absolute; opacity:0.1; animation:leafFloat linear infinite; }
+    @keyframes leafFloat { 0%{transform:translateY(110vh) rotate(0deg);opacity:0} 10%{opacity:0.1} 90%{opacity:0.06} 100%{transform:translateY(-10vh) rotate(360deg);opacity:0} }
+    .hero::after { content:''; position:absolute; bottom:0; left:0; right:0; height:80px; background:linear-gradient(to bottom,transparent,#1a0d06); clip-path:ellipse(60% 80px at 50% 100%); }
+    .hero-content { text-align:center; z-index:2; padding:2rem; animation:heroIn 1s ease-out; }
+    @keyframes heroIn { from{opacity:0;transform:translateY(30px)} to{opacity:1;transform:translateY(0)} }
+    .hero-badge { display:inline-block; background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3); color:#c8e6c9; padding:6px 20px; border-radius:100px; font-size:0.78rem; letter-spacing:0.12em; text-transform:uppercase; margin-bottom:1.5rem; backdrop-filter:blur(8px); }
+    .hero h1 { font-family:'Playfair Display',serif; font-size:clamp(2.8rem,7vw,5.5rem); color:#fff; line-height:1.1; margin-bottom:1rem; text-shadow:0 4px 30px rgba(0,0,0,0.3); }
+    .hero h1 span { color:var(--wheat-light); }
+    .hero p { font-size:clamp(1rem,2.5vw,1.25rem); color:#c8e6c9; max-width:540px; margin:0 auto 2.5rem; line-height:1.7; }
+    .hero-cta { display:inline-flex; align-items:center; gap:10px; background:var(--wheat); color:var(--soil); padding:16px 36px; border-radius:100px; font-weight:600; font-size:1rem; cursor:pointer; border:none; transition:all 0.3s; box-shadow:0 8px 30px rgba(0,0,0,0.2); font-family:'DM Sans',sans-serif; }
+    .hero-cta:hover { background:var(--wheat-light); transform:translateY(-3px); box-shadow:0 14px 40px rgba(0,0,0,0.3); }
+    .scroll-hint { position:absolute; bottom:100px; left:50%; transform:translateX(-50%); color:rgba(255,255,255,0.5); font-size:0.78rem; letter-spacing:0.1em; text-transform:uppercase; display:flex; flex-direction:column; align-items:center; gap:8px; animation:fadeInUp 2s ease 1.5s both; }
+    .scroll-dot { width:6px; height:6px; background:rgba(255,255,255,0.5); border-radius:50%; animation:bounce 1.5s ease infinite; }
+    @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(8px)} }
+    @keyframes fadeInUp { from{opacity:0;transform:translate(-50%,20px)} to{opacity:1;transform:translate(-50%,0)} }
+
+    /* SECTIONS */
+    section { padding:100px 5%; }
+    .section-label { font-size:0.75rem; letter-spacing:0.18em; text-transform:uppercase; color:var(--leaf); font-weight:600; margin-bottom:12px; display:flex; align-items:center; gap:10px; }
+    .section-label::before { content:''; display:block; width:32px; height:2px; background:var(--leaf-light); }
+    .section-title { font-family:'Playfair Display',serif; font-size:clamp(2rem,4vw,3.2rem); color:var(--soil); line-height:1.2; margin-bottom:1rem; }
+    .section-sub { color:#6b5744; font-size:1.05rem; line-height:1.8; max-width:580px; }
+
+    /* DETECT */
+    #detect { background:var(--cream); }
+    .detect-grid { display:grid; grid-template-columns:1fr 1fr; gap:60px; align-items:start; margin-top:60px; }
+
+    .upload-zone { border:2.5px dashed var(--leaf-pale); border-radius:24px; background:linear-gradient(135deg,#f0faf0,#fff9f0); padding:50px 30px; text-align:center; cursor:pointer; transition:all 0.3s; position:relative; overflow:hidden; }
+    .upload-zone:hover { border-color:var(--leaf); transform:translateY(-4px); box-shadow:0 16px 48px var(--shadow); }
+    .upload-zone.drag-over { border-color:var(--leaf); background:#e8f5e9; }
+    .upload-icon { width:80px; height:80px; background:linear-gradient(135deg,var(--leaf),var(--leaf-light)); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 20px; font-size:2rem; box-shadow:0 8px 24px rgba(45,106,47,0.3); transition:transform 0.3s; }
+    .upload-zone:hover .upload-icon { transform:scale(1.08) rotate(-5deg); }
+    .upload-zone h3 { font-size:1.2rem; font-weight:600; margin-bottom:8px; }
+    .upload-zone p { color:#6b5744; font-size:0.9rem; }
+    .upload-zone input[type=file] { display:none; }
+
+    .preview-container { position:relative; border-radius:20px; overflow:hidden; margin-top:20px; display:none; }
+    .preview-container img { width:100%; max-height:300px; object-fit:cover; display:block; }
+    .preview-overlay { position:absolute; inset:0; background:linear-gradient(to bottom,transparent 50%,rgba(26,61,26,0.8)); display:flex; align-items:flex-end; padding:16px; }
+    .preview-overlay span { color:#fff; font-size:0.85rem; }
+
+    .btn-predict { width:100%; margin-top:20px; padding:18px; background:linear-gradient(135deg,var(--leaf),#1b5e20); color:#fff; border:none; border-radius:14px; font-size:1rem; font-weight:600; font-family:'DM Sans',sans-serif; cursor:pointer; transition:all 0.3s; display:flex; align-items:center; justify-content:center; gap:10px; box-shadow:0 6px 24px rgba(45,106,47,0.35); }
+    .btn-predict:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 10px 32px rgba(45,106,47,0.45); }
+    .btn-predict:disabled { opacity:0.6; cursor:not-allowed; }
+    .spinner { width:22px; height:22px; border:3px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+
+    .result-panel { display:none; animation:slideIn 0.5s ease; }
+    @keyframes slideIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
+    .result-header { background:linear-gradient(135deg,var(--leaf),#1b5e20); border-radius:20px 20px 0 0; padding:28px; color:#fff; }
+    .result-badge { display:inline-flex; align-items:center; gap:6px; padding:4px 14px; border-radius:100px; font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:12px; }
+    .badge-medium { background:rgba(255,193,7,0.25); color:#ffe082; }
+    .badge-high { background:rgba(244,67,54,0.25); color:#ef9a9a; }
+    .badge-low { background:rgba(76,175,80,0.25); color:#a5d6a7; }
+    .result-crop { font-family:'Playfair Display',serif; font-size:1.8rem; line-height:1.2; }
+    .result-disease { color:rgba(255,255,255,0.75); font-size:1rem; margin-top:4px; }
+    .confidence-bar-wrap { margin-top:16px; background:rgba(255,255,255,0.15); border-radius:100px; height:8px; overflow:hidden; }
+    .confidence-bar { height:100%; background:var(--wheat-light); border-radius:100px; transition:width 1s ease; }
+    .confidence-label { font-size:0.8rem; color:rgba(255,255,255,0.7); margin-top:6px; }
+    .result-body { background:#fff; border:1px solid #e8f5e9; border-top:none; border-radius:0 0 20px 20px; padding:28px; }
+    .info-section { margin-bottom:24px; }
+    .info-section h4 { font-size:0.75rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--leaf); font-weight:700; margin-bottom:10px; }
+    .info-section p { color:#4a3728; font-size:0.92rem; line-height:1.7; }
+    .action-list { list-style:none; }
+    .action-list li { display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-bottom:1px solid #f5f5f5; font-size:0.9rem; color:#4a3728; line-height:1.5; }
+    .action-list li:last-child { border-bottom:none; }
+    .action-list li::before { content:'✓'; width:22px; height:22px; background:#e8f5e9; color:var(--leaf); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:700; flex-shrink:0; margin-top:1px; }
+    .extension-alert { background:linear-gradient(135deg,#fff3e0,#fbe9e7); border:1px solid #ffcc80; border-radius:12px; padding:16px 20px; font-size:0.88rem; color:#bf360c; line-height:1.6; display:flex; gap:12px; align-items:flex-start; }
+    .extension-alert span:first-child { font-size:1.2rem; flex-shrink:0; }
+    .btn-chat { width:100%; margin-top:20px; padding:14px; background:linear-gradient(135deg,var(--wheat),#b8860b); color:var(--soil); border:none; border-radius:12px; font-size:0.95rem; font-weight:600; font-family:'DM Sans',sans-serif; cursor:pointer; transition:all 0.3s; display:flex; align-items:center; justify-content:center; gap:8px; }
+    .btn-chat:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(180,130,40,0.4); }
+
+    /* HOW IT WORKS */
+    #how { background:linear-gradient(180deg,#f1f8f1,var(--cream)); }
+    .steps-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:32px; margin-top:60px; }
+    .step-card { background:#fff; border-radius:20px; padding:36px 28px; border:1px solid #e8f5e9; position:relative; overflow:hidden; transition:transform 0.3s,box-shadow 0.3s; opacity:0; }
+    .step-card.visible { opacity:1; animation:heroIn 0.6s ease forwards; }
+    .step-card:hover { transform:translateY(-6px); box-shadow:0 20px 60px var(--shadow); }
+    .step-num { font-family:'Playfair Display',serif; font-size:4rem; color:#e8f5e9; line-height:1; margin-bottom:16px; }
+    .step-icon { font-size:2rem; margin-bottom:12px; }
+    .step-card h3 { font-size:1.15rem; font-weight:600; color:var(--soil); margin-bottom:10px; }
+    .step-card p { font-size:0.9rem; color:#6b5744; line-height:1.7; }
+
+    /* CHATBOT */
+    #chat-section { background:var(--cream); }
+    .chat-container { max-width:780px; margin:60px auto 0; background:#fff; border-radius:28px; box-shadow:0 24px 80px var(--shadow); overflow:hidden; border:1px solid #e8f5e9; }
+    .chat-header { background:linear-gradient(135deg,var(--leaf),#1b5e20); padding:24px 28px; display:flex; align-items:center; gap:14px; }
+    .chat-avatar { width:48px; height:48px; background:rgba(255,255,255,0.2); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.5rem; border:2px solid rgba(255,255,255,0.3); }
+    .chat-info h3 { color:#fff; font-size:1.1rem; font-weight:600; }
+    .chat-info p { color:rgba(255,255,255,0.7); font-size:0.82rem; margin-top:2px; }
+    .chat-status { margin-left:auto; display:flex; align-items:center; gap:6px; font-size:0.78rem; color:rgba(255,255,255,0.8); }
+    .status-dot { width:8px; height:8px; background:#69f0ae; border-radius:50%; animation:pulse 2s ease infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .chat-messages { height:420px; overflow-y:auto; padding:24px; display:flex; flex-direction:column; gap:16px; scroll-behavior:smooth; }
+    .chat-messages::-webkit-scrollbar { width:4px; }
+    .chat-messages::-webkit-scrollbar-thumb { background:#c8e6c9; border-radius:4px; }
+    .msg { display:flex; gap:10px; animation:msgIn 0.3s ease; }
+    @keyframes msgIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+    .msg.user { flex-direction:row-reverse; }
+    .msg-avatar { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1rem; flex-shrink:0; margin-top:2px; }
+    .msg.bot .msg-avatar { background:linear-gradient(135deg,var(--leaf),#1b5e20); }
+    .msg.user .msg-avatar { background:linear-gradient(135deg,var(--wheat),#b8860b); }
+    .msg-bubble { max-width:75%; padding:12px 16px; border-radius:18px; font-size:0.9rem; line-height:1.6; }
+    .msg.bot .msg-bubble { background:#f1f8f1; color:var(--soil); border-bottom-left-radius:4px; }
+    .msg.user .msg-bubble { background:linear-gradient(135deg,var(--leaf),#1b5e20); color:#fff; border-bottom-right-radius:4px; }
+    .typing-indicator { display:flex; gap:4px; padding:14px 16px; background:#f1f8f1; border-radius:18px; border-bottom-left-radius:4px; }
+    .typing-dot { width:8px; height:8px; background:var(--leaf-pale); border-radius:50%; animation:typingBounce 1.2s ease infinite; }
+    .typing-dot:nth-child(2) { animation-delay:0.2s; }
+    .typing-dot:nth-child(3) { animation-delay:0.4s; }
+    @keyframes typingBounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+    .chat-suggestions { padding:0 24px 16px; display:flex; flex-wrap:wrap; gap:8px; }
+    .suggestion-chip { padding:7px 14px; border:1.5px solid var(--leaf-pale); border-radius:100px; font-size:0.8rem; color:var(--leaf); cursor:pointer; transition:all 0.2s; background:transparent; font-family:'DM Sans',sans-serif; }
+    .suggestion-chip:hover { background:var(--leaf); color:#fff; border-color:var(--leaf); }
+    .chat-input-area { padding:16px 24px; border-top:1px solid #f0f7f0; display:flex; gap:12px; align-items:flex-end; }
+    .chat-input { flex:1; padding:13px 18px; border:1.5px solid #d4e8d4; border-radius:14px; font-size:0.92rem; font-family:'DM Sans',sans-serif; resize:none; outline:none; transition:border-color 0.2s; max-height:120px; min-height:48px; line-height:1.5; }
+    .chat-input:focus { border-color:var(--leaf); }
+    .chat-send { width:48px; height:48px; background:linear-gradient(135deg,var(--leaf),#1b5e20); border:none; border-radius:12px; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:1.1rem; transition:all 0.2s; flex-shrink:0; }
+    .chat-send:hover { transform:scale(1.05); box-shadow:0 4px 16px rgba(45,106,47,0.4); }
+
+    /* CONTACT */
+    #contact { background:linear-gradient(180deg,var(--cream),#f1f8f1); }
+    .contact-grid { display:grid; grid-template-columns:1fr 1.2fr; gap:60px; align-items:start; margin-top:60px; }
+    .contact-info-card { background:linear-gradient(135deg,var(--leaf),#1b5e20); border-radius:24px; padding:40px; color:#fff; position:relative; overflow:hidden; }
+    .contact-info-card::after { content:'🌾'; position:absolute; bottom:-20px; right:-10px; font-size:8rem; opacity:0.1; }
+    .contact-info-card h3 { font-family:'Playfair Display',serif; font-size:1.8rem; margin-bottom:10px; }
+    .contact-info-card p { color:rgba(255,255,255,0.75); line-height:1.7; margin-bottom:28px; font-size:0.95rem; }
+    .contact-item { display:flex; align-items:center; gap:14px; padding:14px; background:rgba(255,255,255,0.12); border-radius:14px; margin-bottom:12px; transition:background 0.2s; }
+    .contact-item:hover { background:rgba(255,255,255,0.2); }
+    .contact-icon { width:44px; height:44px; background:rgba(255,255,255,0.15); border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.2rem; flex-shrink:0; }
+    .contact-item-info span { display:block; }
+    .contact-item-info .label { font-size:0.72rem; color:rgba(255,255,255,0.6); text-transform:uppercase; letter-spacing:0.08em; }
+    .contact-item-info .value { font-size:0.95rem; font-weight:500; }
+    .contact-form-wrap { background:#fff; border-radius:24px; padding:40px; border:1px solid #e8f5e9; box-shadow:0 8px 40px var(--shadow); }
+    .contact-form-wrap h3 { font-family:'Playfair Display',serif; font-size:1.5rem; margin-bottom:6px; }
+    .contact-form-wrap > p { color:#6b5744; font-size:0.9rem; margin-bottom:28px; }
+    .form-group { margin-bottom:18px; }
+    .form-group label { display:block; font-size:0.82rem; font-weight:600; color:var(--soil); margin-bottom:7px; letter-spacing:0.04em; }
+    .form-group input,.form-group select,.form-group textarea { width:100%; padding:13px 16px; border:1.5px solid #d4e8d4; border-radius:12px; font-size:0.92rem; font-family:'DM Sans',sans-serif; outline:none; transition:border-color 0.2s,box-shadow 0.2s; background:#fafff9; color:var(--soil); }
+    .form-group input:focus,.form-group select:focus,.form-group textarea:focus { border-color:var(--leaf); box-shadow:0 0 0 3px rgba(76,175,80,0.1); }
+    .form-group textarea { min-height:100px; resize:vertical; }
+    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .btn-submit { width:100%; padding:16px; background:linear-gradient(135deg,var(--leaf),#1b5e20); color:#fff; border:none; border-radius:12px; font-size:1rem; font-weight:600; font-family:'DM Sans',sans-serif; cursor:pointer; transition:all 0.3s; margin-top:8px; }
+    .btn-submit:hover { transform:translateY(-2px); box-shadow:0 8px 28px rgba(45,106,47,0.4); }
+    .form-success { display:none; text-align:center; padding:30px; }
+    .form-success .tick { width:64px; height:64px; background:linear-gradient(135deg,var(--leaf),var(--leaf-light)); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.8rem; margin:0 auto 16px; }
+    .form-success h4 { font-size:1.2rem; font-weight:600; margin-bottom:8px; }
+    .form-success p { color:#6b5744; font-size:0.9rem; }
+
+    /* FOOTER */
+    footer { background:var(--soil); color:rgba(255,255,255,0.65); text-align:center; padding:40px 5%; font-size:0.88rem; }
+    footer strong { color:var(--wheat-light); }
+
+    /* FAB */
+    .fab { position:fixed; bottom:32px; right:32px; width:60px; height:60px; background:linear-gradient(135deg,var(--leaf),#1b5e20); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.5rem; cursor:pointer; box-shadow:0 8px 32px rgba(45,106,47,0.5); z-index:50; transition:all 0.3s; border:none; animation:fabIn 1s ease 2s both; }
+    @keyframes fabIn { from{transform:scale(0)} to{transform:scale(1)} }
+    .fab:hover { transform:scale(1.1); }
+    .fab-label { position:absolute; right:70px; background:var(--soil); color:#fff; padding:6px 14px; border-radius:100px; font-size:0.78rem; white-space:nowrap; font-family:'DM Sans',sans-serif; }
+
+    /* TOAST */
+    .toast { position:fixed; bottom:32px; left:50%; transform:translateX(-50%) translateY(100px); background:var(--soil); color:#fff; padding:14px 24px; border-radius:100px; font-size:0.88rem; z-index:200; transition:transform 0.4s ease; border-left:4px solid var(--leaf-light); }
+    .toast.show { transform:translateX(-50%) translateY(0); }
+
+    /* RESPONSIVE */
+    @media (max-width:900px) {
+      .detect-grid,.steps-grid,.contact-grid { grid-template-columns:1fr; gap:32px; }
+      .form-row { grid-template-columns:1fr; }
+      section { padding:70px 5%; }
+    }
+    @media (max-width:600px) { .nav-links { display:none; } .hero h1 { font-size:2.6rem; } }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">🌿 Agri<span class="dot">Guard</span></div>
+  <ul class="nav-links">
+    <li><a href="#detect">Detect Disease</a></li>
+    <li><a href="#how">How It Works</a></li>
+    <li><a href="#chat-section">Ask Expert</a></li>
+    <li><a href="#contact">Contact Officer</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="home">
+  <div class="leaves-bg" id="leavesContainer"></div>
+  <div class="hero-content">
+    <div class="hero-badge">🌱 AI-Powered Crop Health</div>
+    <h1>Detect Plant Disease<br/><span>Save Your Harvest</span></h1>
+    <p>Upload a photo of your crop leaf and our AI instantly identifies diseases — giving you a full action plan to protect your farm.</p>
+    <button class="hero-cta" onclick="document.getElementById('detect').scrollIntoView({behavior:'smooth'})">
+      📸 Scan a Leaf Now
+    </button>
+  </div>
+  <div class="scroll-hint"><span>Scroll to begin</span><div class="scroll-dot"></div></div>
+</section>
+
+<!-- DETECT -->
+<section id="detect">
+  <div class="section-label">AI Diagnosis</div>
+  <h2 class="section-title">Upload Your Plant Leaf</h2>
+  <p class="section-sub">Our model analyses corn, potato, and tomato leaves. Results appear in seconds with a full treatment plan.</p>
+  <div class="detect-grid">
+    <div>
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('leafInput').click()">
+        <div class="upload-icon">🍃</div>
+        <h3>Drop your leaf image here</h3>
+        <p>or click to browse — JPG, JPEG, PNG supported</p>
+        <input type="file" id="leafInput" accept=".jpg,.jpeg,.png" onchange="handleFileSelect(event)"/>
+      </div>
+      <div class="preview-container" id="previewContainer">
+        <img id="previewImg" src="" alt="Preview"/>
+        <div class="preview-overlay"><span id="previewName">leaf.jpg</span></div>
+      </div>
+      <button class="btn-predict" id="predictBtn" onclick="predict()" disabled>
+        <span id="predictBtnText">🔍 Analyse Leaf</span>
+      </button>
+    </div>
+    <div>
+      <div id="resultPlaceholder" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:#a5c8a5;text-align:center;gap:16px;">
+        <div style="font-size:5rem;opacity:0.25">🌿</div>
+        <p style="font-size:0.95rem;max-width:220px;line-height:1.6">Your diagnosis will appear here after scanning a leaf.</p>
+      </div>
+      <div class="result-panel" id="resultPanel">
+        <div class="result-header">
+          <div class="result-badge" id="severityBadge">⚠ Medium Risk</div>
+          <div class="result-crop" id="resultCrop">Crop Name</div>
+          <div class="result-disease" id="resultDisease">Disease Detected</div>
+          <div class="confidence-bar-wrap"><div class="confidence-bar" id="confBar" style="width:0%"></div></div>
+          <div class="confidence-label" id="confLabel">Confidence: 0%</div>
+        </div>
+        <div class="result-body">
+          <div class="info-section"><h4>🧫 Symptoms</h4><p id="symptoms"></p></div>
+          <div class="info-section"><h4>🦠 Cause</h4><p id="cause"></p></div>
+          <div class="info-section"><h4>⚡ Immediate Actions</h4><ul class="action-list" id="actionList"></ul></div>
+          <div class="info-section"><h4>🛡 Prevention</h4><ul class="action-list" id="preventList"></ul></div>
+          <div class="extension-alert"><span>📞</span><span id="extensionAdvice"></span></div>
+          <button class="btn-chat" onclick="openChatWithContext()">💬 Ask Agri-Expert About This Disease</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how">
+  <div class="section-label">Process</div>
+  <h2 class="section-title">Simple as 1 — 2 — 3</h2>
+  <p class="section-sub">No technical knowledge needed. Any farmer with a smartphone can use AgriGuard.</p>
+  <div class="steps-grid">
+    <div class="step-card">
+      <div class="step-num">01</div>
+      <div class="step-icon">📷</div>
+      <h3>Take a Photo</h3>
+      <p>Take a clear, close-up photo of the affected leaf in good lighting so the spots or marks are clearly visible.</p>
+    </div>
+    <div class="step-card">
+      <div class="step-num">02</div>
+      <div class="step-icon">🤖</div>
+      <h3>AI Analysis</h3>
+      <p>Our machine learning model analyses the leaf image and identifies the disease within seconds with high confidence.</p>
+    </div>
+    <div class="step-card">
+      <div class="step-num">03</div>
+      <div class="step-icon">💊</div>
+      <h3>Get Your Action Plan</h3>
+      <p>Receive a detailed treatment plan, prevention tips, and know exactly when to call your local extension officer.</p>
+    </div>
+  </div>
+</section>
+
+<!-- CHATBOT -->
+<section id="chat-section">
+  <div class="section-label">AI Agricultural Expert</div>
+  <h2 class="section-title">Ask Our Agri-Expert</h2>
+  <p class="section-sub">Have questions about your crops? Our AI farming assistant is available 24/7 to guide you.</p>
+  <div class="chat-container">
+    <div class="chat-header">
+      <div class="chat-avatar">🌾</div>
+      <div class="chat-info"><h3>Agri-Expert Assistant</h3><p>AI Farming Specialist • Available 24/7</p></div>
+      <div class="chat-status"><div class="status-dot"></div>Online</div>
+    </div>
+    <div class="chat-messages" id="chatMessages">
+      <div class="msg bot">
+        <div class="msg-avatar">🌾</div>
+        <div class="msg-bubble">Hello! I'm your AgriGuard expert. I can help with plant diseases, treatment advice, prevention tips, and farming best practices. What would you like to know? 🌱</div>
+      </div>
+    </div>
+    <div class="chat-suggestions" id="chatSuggestions">
+      <button class="suggestion-chip" onclick="sendSuggestion(this)">What fungicides should I use?</button>
+      <button class="suggestion-chip" onclick="sendSuggestion(this)">How to prevent crop diseases?</button>
+      <button class="suggestion-chip" onclick="sendSuggestion(this)">Best time to spray my crops</button>
+      <button class="suggestion-chip" onclick="sendSuggestion(this)">Organic disease control methods</button>
+    </div>
+    <div class="chat-input-area">
+      <textarea class="chat-input" id="chatInput" placeholder="Ask about your crops..." rows="1"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"
+        oninput="autoResize(this)"></textarea>
+      <button class="chat-send" onclick="sendChat()">&#10148;</button>
+    </div>
+  </div>
+</section>
+
+<!-- CONTACT -->
+<section id="contact">
+  <div class="section-label">Extension Services</div>
+  <h2 class="section-title">Contact Your Extension Officer</h2>
+  <p class="section-sub">When disease is severe, our trained extension officers are ready to visit your farm and provide hands-on support.</p>
+  <div class="contact-grid">
+    <div class="contact-info-card">
+      <h3>We're Here For You</h3>
+      <p>Our agricultural extension officers provide direct farm visits, soil testing, and personalised treatment guidance for your crops.</p>
+      <div class="contact-item"><div class="contact-icon">📞</div><div class="contact-item-info"><span class="label">Hotline</span><span class="value">+254 712 345 678</span></div></div>
+      <div class="contact-item"><div class="contact-icon">📧</div><div class="contact-item-info"><span class="label">Email</span><span class="value">officer@agriguard.farm</span></div></div>
+      <div class="contact-item"><div class="contact-icon">🕒</div><div class="contact-item-info"><span class="label">Office Hours</span><span class="value">Mon–Sat, 7:00 AM – 6:00 PM</span></div></div>
+      <div class="contact-item"><div class="contact-icon">🏠</div><div class="contact-item-info"><span class="label">Location</span><span class="value">Ministry of Agriculture, County Office</span></div></div>
+    </div>
+    <div class="contact-form-wrap">
+      <h3>Request a Farm Visit</h3>
+      <p>Fill in your details and an officer will contact you within 24 hours.</p>
+      <div id="contactForm">
+        <div class="form-row">
+          <div class="form-group"><label>First Name</label><input type="text" placeholder="John" id="firstName"/></div>
+          <div class="form-group"><label>Last Name</label><input type="text" placeholder="Kamau" id="lastName"/></div>
+        </div>
+        <div class="form-group"><label>Phone Number</label><input type="tel" placeholder="+254 7XX XXX XXX" id="phone"/></div>
+        <div class="form-group"><label>Location / Village</label><input type="text" placeholder="e.g. Nyeri, Laikipia..." id="location"/></div>
+        <div class="form-group"><label>Crop Affected</label>
+          <select id="cropType"><option value="">Select crop</option><option>Corn (Maize)</option><option>Potato</option><option>Tomato</option><option>Other</option></select>
+        </div>
+        <div class="form-group"><label>Describe the Problem</label><textarea placeholder="Describe the symptoms, how many plants are affected, how long this has been happening..." id="problemDesc"></textarea></div>
+        <div class="form-group"><label>Urgency Level</label>
+          <select id="urgency"><option>Routine — Within the week</option><option>Soon — Within 2 days</option><option>Urgent — Need help today</option></select>
+        </div>
+        <button class="btn-submit" onclick="submitContactForm()">📩 Send Request to Extension Officer</button>
+      </div>
+      <div class="form-success" id="formSuccess">
+        <div class="tick">✓</div>
+        <h4>Request Sent Successfully!</h4>
+        <p>An extension officer will contact you within 24 hours. Follow the AI-recommended actions in the meantime.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div style="margin-bottom:8px;font-size:1.2rem">🌿 <strong>AgriGuard</strong></div>
+  <p>AI-powered plant disease detection — empowering African farmers.</p>
+  <p style="margin-top:8px;font-size:0.8rem;opacity:0.5">© 2025 AgriGuard. Serving farmers across Africa.</p>
+</footer>
+
+<button class="fab" onclick="document.getElementById('chat-section').scrollIntoView({behavior:'smooth'})" title="Ask Expert">
+  💬<span class="fab-label">Ask Expert</span>
+</button>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// Leaf animations
+(function(){
+  const c=document.getElementById('leavesContainer');
+  for(let i=0;i<14;i++){
+    const el=document.createElement('div');
+    el.className='leaf-anim';
+    el.innerHTML=`<svg viewBox="0 0 100 100" width="${40+Math.random()*60}" height="${40+Math.random()*60}" style="fill:#a5d6a7"><path d="M50,10 C70,10 90,30 90,50 C90,70 70,90 50,90 C30,70 10,50 30,30 Z"/></svg>`;
+    el.style.left=Math.random()*100+'%';
+    el.style.animationDuration=(8+Math.random()*14)+'s';
+    el.style.animationDelay=(Math.random()*12)+'s';
+    c.appendChild(el);
+  }
+})();
+
+// Drag & drop
+const uploadZone=document.getElementById('uploadZone');
+uploadZone.addEventListener('dragover',e=>{e.preventDefault();uploadZone.classList.add('drag-over');});
+uploadZone.addEventListener('dragleave',()=>uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.classList.remove('drag-over');if(e.dataTransfer.files[0])processFile(e.dataTransfer.files[0]);});
+
+let currentFile=null, currentDiseaseContext=null;
+
+function handleFileSelect(e){if(e.target.files[0])processFile(e.target.files[0]);}
+function processFile(file){
+  currentFile=file;
+  const r=new FileReader();
+  r.onload=e=>{
+    document.getElementById('previewImg').src=e.target.result;
+    document.getElementById('previewName').textContent=file.name;
+    document.getElementById('previewContainer').style.display='block';
+    document.getElementById('predictBtn').disabled=false;
+    document.getElementById('predictBtnText').textContent='🔍 Analyse Leaf';
+  };
+  r.readAsDataURL(file);
+}
+
+async function predict(){
+  if(!currentFile)return;
+  const btn=document.getElementById('predictBtn');
+  btn.disabled=true;
+  document.getElementById('predictBtnText').innerHTML='<div class="spinner"></div> Analysing...';
+  const fd=new FormData();
+  fd.append('file',currentFile);
+  try{
+    const res=await fetch('/predict',{method:'POST',body:fd});
+    const data=await res.json();
+    if(data.error){showToast('Error: '+data.error);return;}
+    currentDiseaseContext=data;
+    const sm={low:'badge-low',medium:'badge-medium',high:'badge-high'};
+    const sl={low:'✅ Low Risk',medium:'⚠ Medium Risk',high:'🔴 High Risk'};
+    document.getElementById('severityBadge').className='result-badge '+sm[data.severity];
+    document.getElementById('severityBadge').textContent=sl[data.severity];
+    document.getElementById('resultCrop').textContent=data.crop;
+    document.getElementById('resultDisease').textContent=data.disease+' Detected';
+    document.getElementById('symptoms').textContent=data.symptoms;
+    document.getElementById('cause').textContent=data.cause;
+    document.getElementById('extensionAdvice').textContent=data.when_to_call_extension;
+    setTimeout(()=>{
+      document.getElementById('confBar').style.width=data.confidence+'%';
+      document.getElementById('confLabel').textContent='Confidence: '+data.confidence+'%';
+    },100);
+    document.getElementById('actionList').innerHTML=data.immediate_actions.map(a=>`<li>${a}</li>`).join('');
+    document.getElementById('preventList').innerHTML=data.prevention.map(p=>`<li>${p}</li>`).join('');
+    document.getElementById('resultPlaceholder').style.display='none';
+    document.getElementById('resultPanel').style.display='block';
+    updateChatSuggestions(data);
+    showToast('✅ Analysis complete!');
+  }catch(e){showToast('Connection error. Is the server running?');}
+  finally{btn.disabled=false;document.getElementById('predictBtnText').textContent='🔍 Analyse Again';}
+}
+
+function updateChatSuggestions(data){
+  document.getElementById('chatSuggestions').innerHTML=`
+    <button class="suggestion-chip" onclick="sendSuggestion(this)">What to buy for ${data.disease}?</button>
+    <button class="suggestion-chip" onclick="sendSuggestion(this)">Is ${data.disease} contagious?</button>
+    <button class="suggestion-chip" onclick="sendSuggestion(this)">Organic treatment for ${data.disease}</button>
+    <button class="suggestion-chip" onclick="sendSuggestion(this)">How to save my ${data.crop} harvest?</button>`;
+}
+
+function openChatWithContext(){
+  document.getElementById('chat-section').scrollIntoView({behavior:'smooth'});
+  if(currentDiseaseContext){
+    setTimeout(()=>{
+      document.getElementById('chatInput').value=`I just scanned my ${currentDiseaseContext.crop} leaf and it was diagnosed with ${currentDiseaseContext.disease} (${currentDiseaseContext.confidence}% confidence). What should I do next?`;
+      sendChat();
+    },700);
+  }
+}
+
+// Chatbot
+async function sendChat(){
+  const input=document.getElementById('chatInput');
+  const msg=input.value.trim();
+  if(!msg)return;
+  input.value='';input.style.height='auto';
+  addMessage('user',msg);showTyping();
+  let sys=`You are AgriGuard's agricultural expert assistant helping African smallholder farmers. Specialise in plant diseases for corn, potato, and tomato crops. Give practical, affordable advice using locally-available products in rural Africa. Use simple, clear language suitable for farmers. Be concise but thorough.`;
+  if(currentDiseaseContext)sys+=`\n\nFARMER'S SCAN RESULT: ${currentDiseaseContext.crop} leaf diagnosed with ${currentDiseaseContext.disease} (${currentDiseaseContext.confidence}% confidence). Immediate actions: ${currentDiseaseContext.immediate_actions.join(', ')}.`;
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:sys,messages:[{role:'user',content:msg}]})
+    });
+    const data=await res.json();
+    removeTyping();
+    if(data.content&&data.content[0]){addMessage('bot',data.content[0].text);}
+    else{addMessage('bot','I encountered an issue. Please contact your extension officer at +254 712 345 678.');}
+  }catch(e){
+    removeTyping();
+    addMessage('bot','Unable to reach the AI service. Please check your internet or call your extension officer at +254 712 345 678.');
+  }
+}
+
+function sendSuggestion(el){document.getElementById('chatInput').value=el.textContent;sendChat();}
+function addMessage(role,text){
+  const msgs=document.getElementById('chatMessages');
+  const div=document.createElement('div');
+  div.className='msg '+role;
+  div.innerHTML=`<div class="msg-avatar">${role==='bot'?'🌾':'👤'}</div><div class="msg-bubble">${text.replace(/\n/g,'<br/>')}</div>`;
+  msgs.appendChild(div);msgs.scrollTop=msgs.scrollHeight;
+}
+function showTyping(){
+  const msgs=document.getElementById('chatMessages');
+  const div=document.createElement('div');
+  div.className='msg bot';div.id='typingIndicator';
+  div.innerHTML=`<div class="msg-avatar">🌾</div><div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>`;
+  msgs.appendChild(div);msgs.scrollTop=msgs.scrollHeight;
+}
+function removeTyping(){const t=document.getElementById('typingIndicator');if(t)t.remove();}
+function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,120)+'px';}
+
+// Contact form
+function submitContactForm(){
+  const first=document.getElementById('firstName').value.trim();
+  const phone=document.getElementById('phone').value.trim();
+  const location=document.getElementById('location').value.trim();
+  const problem=document.getElementById('problemDesc').value.trim();
+  if(!first||!phone||!location||!problem){showToast('⚠️ Please fill in all required fields');return;}
+  document.getElementById('contactForm').style.display='none';
+  document.getElementById('formSuccess').style.display='block';
+  showToast('✅ Request sent! An officer will contact you soon.');
+}
+
+// Toast
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),4000);
+}
+
+// Scroll animations
+const observer=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');}});
+},{threshold:0.15});
+document.querySelectorAll('.step-card').forEach(el=>observer.observe(el));
+</script>
+</body>
+</html>
